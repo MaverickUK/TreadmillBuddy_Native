@@ -6,7 +6,7 @@ Native C++ firmware for [Treadmill Buddy](https://github.com/MaverickUK/Treadmil
 
 ## Status
 
-Feature parity with the CircuitPython version 1.2.0, plus improvements. **Running on real hardware** (a Raspberry Pi Pico with the 2.8" Display Pack, since v0.1.0 on 2026-10-21). Still to confirm on hardware: driving the treadmill over RF and a full session. See [Hardware testing](#hardware-testing).
+Feature parity with the CircuitPython version 1.2.0, plus improvements. **Running on real hardware** (a Raspberry Pi Pico with the 2.8" Display Pack, since v0.1.0 on 2026-10-21). It drives a real treadmill (a JTX MoveLight) over RF through complete sessions. See [Hardware testing](#hardware-testing).
 
 ## What's better than the CircuitPython version
 
@@ -172,9 +172,9 @@ These are the things the host tests can't prove. The hardware is a Raspberry Pi 
 - **Buttons on the planning screen.** B swaps SPEED/TIME, and X/Y adjust them.
 - **Display speed.** `s` on the serial console reports `frame=21520us` for a full 320x240 frame (SPI at 62.5 MHz by DMA), and about 9 ms to draw one.
 - **Both cores.** The treadmill core's heartbeat keeps the watchdog fed (no resets), and nothing is transmitted until asked.
+- **RF.** In RF test mode (hold B at power-up), START, STOP, UP and DOWN each drive the treadmill, with the default `RF_REPEATS = 6`.
+- **A full session on the treadmill.** The START countdown and ramp, speed changes between segments, pause/resume, stopping, and completion.
 - **USB.** The board shows up as TREADMILLBUDDY. `scripts/flash-latest.sh` flashes both a release and a local build without a button press (repeated runs, 5–7 s each).
 
 **Still to test:**
-1. **RF.** Hold **B** at power-up and press A/B/X/Y with the treadmill nearby. Each press should register exactly once; adjust `RF_REPEATS` if not. A logic analyser on GP27 should show the same envelope as `rf_codes.h`.
-2. **A full session** with `SPEED_CHANGE_INTERVAL_S = 15` and `SESSION_DURATION_MIN = 5`: check the countdown/ramp display, pause/resume, and that X stops the belt mid-ramp.
-3. **The 1.14" Display Pack** (`pico_114`): only tested on the host so far.
+- **The 1.14" Display Pack** (`pico_114`): only tested on the host so far.
