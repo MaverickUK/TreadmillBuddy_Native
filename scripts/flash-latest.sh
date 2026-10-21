@@ -48,10 +48,23 @@ else
     DRIVE="/media/${USER}/RPI-RP2"
 fi
 
-# Run a command, killing it after $1 seconds (macOS has no `timeout`).
+# Run a command, killing it after $1 seconds. macOS has no `timeout`, and a
+# process stuck on a wedged USB device can ignore even SIGKILL (it's blocked
+# in the kernel), so this never waits on it after the limit: it's left
+# behind (it goes once the device is unplugged) and the script carries on.
 limit() {
     local secs="$1"; shift
-    perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+    "$@" &
+    local pid=$! i
+    for ((i = 0; i < secs * 10; i++)); do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"
+            return
+        fi
+        sleep 0.1
+    done
+    kill -9 "$pid" 2>/dev/null || true
+    return 124
 }
 
 find_picotool() {
@@ -63,9 +76,18 @@ find_picotool() {
 }
 PICOTOOL="$(find_picotool || true)"
 
+# Read from the OS's USB device list, never from the device itself:
+# picotool hangs if it talks to a board that's running the firmware.
+usb_devices() {
+    if [[ "$(uname)" == "Darwin" ]]; then
+        limit 10 ioreg -p IOUSB -w0 2>/dev/null || true
+    else
+        cat /sys/bus/usb/devices/*/product 2>/dev/null || true
+    fi
+}
+
 in_bootloader() {
-    [[ -d "$DRIVE" ]] && return 0
-    [[ -n "$PICOTOOL" ]] && limit 5 "$PICOTOOL" info >/dev/null 2>&1
+    usb_devices | grep -q "RP2 Boot" || [[ -d "$DRIVE" ]]
 }
 
 # The board's serial port while Treadmill Buddy runs (if there's exactly one candidate).
@@ -80,10 +102,32 @@ serial_port() {
 }
 
 running_as_treadmill_buddy() {
-    if [[ "$(uname)" == "Darwin" ]]; then
-        limit 10 system_profiler SPUSBDataType 2>/dev/null | grep -q "TREADMILLBUDDY"
+    usb_devices | grep -q "TREADMILLBUDDY"
+}
+
+# A Python with pyserial (PlatformIO's has one), for the bootloader request.
+find_pyserial() {
+    local py
+    for py in python3 "$HOME/.platformio-venv/bin/python" "$HOME/.platformio/penv/bin/python"; do
+        if command -v "$py" >/dev/null && "$py" -c "import serial" 2>/dev/null; then
+            echo "$py"
+            return
+        fi
+    done
+}
+
+# Ask the firmware to reboot into its bootloader: Arduino-Pico does that when
+# the port is set to 1200 baud with DTR low.
+request_bootloader() {
+    local port="$1" py
+    py="$(find_pyserial || true)"
+    if [[ -n "$py" ]]; then
+        limit 5 "$py" -c "import serial, sys; s = serial.Serial(sys.argv[1], 1200); s.dtr = False; s.close()" "$port" \
+            >/dev/null 2>&1 || true
+    elif [[ "$(uname)" == "Darwin" ]]; then
+        limit 5 stty -f "$port" 1200 hupcl || true
     else
-        grep -qs "TREADMILLBUDDY" /sys/bus/usb/devices/*/product
+        limit 5 stty -F "$port" 1200 hupcl || true
     fi
 }
 
@@ -107,13 +151,13 @@ fi
 if ! in_bootloader; then
     port="$(serial_port || true)"
     if [[ -n "$port" ]] && running_as_treadmill_buddy; then
-        # Opening the port at 1200 baud asks the firmware to reboot into the bootloader.
         echo "Rebooting the board into its bootloader ($port)..."
-        if [[ "$(uname)" == "Darwin" ]]; then limit 5 stty -f "$port" 1200 || true
-        else limit 5 stty -F "$port" 1200 || true; fi
-        for ((i = 0; i < 10; i++)); do
-            in_bootloader && break
-            sleep 1
+        for ((attempt = 0; attempt < 3; attempt++)); do
+            request_bootloader "$port"
+            for ((i = 0; i < 5; i++)); do
+                in_bootloader && break 2
+                sleep 1
+            done
         done
     fi
 fi
@@ -121,6 +165,7 @@ if ! in_bootloader; then
     echo
     echo "Waiting for the Pico's bootloader."
     echo "Unplug the Pico, hold BOOTSEL while plugging it back in, then let go."
+    echo "(If the board stopped responding over USB, unplugging it is what clears that.)"
     for ((i = 0; i < WAIT_FOR_BOOTLOADER_S; i++)); do
         in_bootloader && break
         sleep 1
