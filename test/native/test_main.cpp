@@ -537,18 +537,20 @@ TEST(app_stop_while_running_makes_a_new_plan) {
 TEST(app_planning_buttons) {
     Harness h;
     CHECK(h.runUntil(App::State::Planning));
+    CHECK(!h.view().editingTime);  // SPEED first
+    const int before = h.view().boostTenths;
+    h.press('X');
+    CHECK_EQ(h.view().boostTenths, before + 10);  // one bar up 1.0 km/h
+    h.press('Y');
+    CHECK_EQ(h.view().boostTenths, before);
+    h.press('B');  // now TIME
     CHECK(h.view().editingTime);
-    h.press('X');  // TIME 5 -> 10 min
+    h.press('X');  // 5 -> 10 min
     CHECK_EQ(h.app.session().durationMin, 10);
     CHECK_EQ(h.app.plan().n, 10);
     h.press('Y');
     h.press('Y');  // can't go under 5 min
     CHECK_EQ(h.app.session().durationMin, 5);
-    h.press('B');  // now INTENSITY
-    CHECK(!h.view().editingTime);
-    const int before = h.view().boostTenths;
-    h.press('X');
-    CHECK_EQ(h.view().boostTenths, before + 10);  // one bar up 1.0 km/h
 }
 
 TEST(app_pause_without_stopping_the_belt) {

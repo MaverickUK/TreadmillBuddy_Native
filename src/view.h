@@ -24,7 +24,7 @@ struct View {
     uint32_t planVersion = 0;
     int durationMin = 0;
     int boostTenths = 0;
-    bool editingTime = true;
+    bool editingTime = false;
     uint32_t distanceHkm = 0;  // hundredths of a km
 
     // Session (and the Starting/Resuming box)

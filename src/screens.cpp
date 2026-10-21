@@ -4,6 +4,9 @@
 #include <string.h>
 
 #include "config.h"
+#include "fonts/atkinson_bold_16.h"
+#include "fonts/atkinson_bold_24.h"
+#include "fonts/atkinson_regular_15.h"
 #include "fonts/poppins_bold_32.h"
 #include "fonts/poppins_bold_56.h"
 #include "fonts/poppins_semibold_14.h"
@@ -24,20 +27,22 @@ constexpr uint16_t AMBER = rgb565(0xFFAA00);
 constexpr uint16_t ACCENT = rgb565(0x00C8FF);
 constexpr uint16_t RED = rgb565(0xFF3030);
 constexpr uint16_t PAST_GREY = rgb565(0x555555);
+constexpr uint16_t DARK_GREY = rgb565(0x3A3A3A);
+constexpr uint16_t LIGHT_GREY = rgb565(0xB4B4B4);
+constexpr uint16_t ACTIVE_BG = rgb565(0x06303F);  // a dark tint of ACCENT
 
 // Positions and text scales for the panel size (ui.py's _layout()).
 struct Layout {
     int W, H;
     bool big;
     int chartLeft, chartTop, chartBottom;
-    int sTitle, sMode, sSpeed, sKmh, sTval, sDone, sStats, sBox;
+    int sTitle, sSpeed, sKmh, sTval, sDone, sStats, sBox;
 
     Layout(int w, int h) : W(w), H(h), big(h >= 160) {
         chartLeft = big ? 12 : 6;
         chartTop = big ? 90 : 48;
         chartBottom = H - (big ? 16 : 12);
         sTitle = big ? 3 : 2;
-        sMode = big ? 2 : 1;
         sSpeed = big ? 6 : 3;
         sKmh = big ? 2 : 1;
         sTval = big ? 2 : 1;
@@ -162,25 +167,59 @@ void drawSplash(Canvas& c, const Layout& L, const View& v) {
         c.text(L.W / 2, L.H - 8, "recovered from a fault: belt stopped", 1, RED, Align::Middle, Align::Middle);
 }
 
+// A rectangle's outline, `t` pixels thick, inside x, y, w, h.
+void outline(Canvas& c, int x, int y, int w, int h, uint16_t colour, int t) {
+    c.fillRect(x, y, w, t, colour);
+    c.fillRect(x, y + h - t, w, t, colour);
+    c.fillRect(x, y, t, h, colour);
+    c.fillRect(x + w - t, y, t, h, colour);
+}
+
+// One of the planning fields as a card, lit in the accent colour while X/Y
+// adjust it: caption over value on the 2.8" pack, side by side on the 1.14".
+void drawField(Canvas& c, const Layout& L, int x, int y, int w, int h, const char* caption, const char* value,
+               bool active) {
+    if (active) c.fillRect(x, y, w, h, ACTIVE_BG);
+    outline(c, x, y, w, h, active ? ACCENT : DARK_GREY, active ? 2 : 1);
+    const uint16_t captionColour = active ? ACCENT : GREY, valueColour = active ? WHITE : LIGHT_GREY;
+    if (L.big) {
+        c.text(fonts::ATKINSON_REGULAR_15, x + 10, y + 7, caption, captionColour, Align::Start, Align::Start);
+        if (active) c.text(fonts::ATKINSON_REGULAR_15, x + w - 10, y + 7, "X+  Y-", GREY, Align::End, Align::Start);
+        c.text(fonts::ATKINSON_BOLD_24, x + 10, y + h - 8, value, valueColour, Align::Start, Align::End);
+    } else {
+        c.text(x + 5, y + h / 2, caption, 1, captionColour, Align::Start, Align::Middle);
+        c.text(fonts::ATKINSON_BOLD_16, x + w - 5, y + h / 2, value, valueColour, Align::End, Align::Middle);
+    }
+}
+
 void drawPlanning(Canvas& c, const Layout& L, const View& v) {
     drawChart(c, L, *v.plan);
 
-    const int titleY = L.big ? 20 : 10, modeY = L.big ? 52 : 27, hintY = L.big ? 78 : 39;
-    char buf[48], num[12];
-    c.text(L.W / 2, titleY, "SESSION PLAN", L.sTitle, WHITE, Align::Middle, Align::Middle);
-
-    snprintf(buf, sizeof(buf), "TIME %dm", v.durationMin);
-    c.text(L.chartLeft, modeY, buf, L.sMode, v.editingTime ? ACCENT : GREY, Align::Start, Align::Middle);
-
-    // the boost reads as a running total of speed added across the session:
-    // every X press lifts one bar by 1.0 km/h, every Y drops one
+    // SPEED (left) and TIME (right) across the top; B swaps which X/Y adjust.
+    // The speed is the boost's running total across the session: every X
+    // press lifts one bar by 1.0 km/h, every Y drops one.
+    char speed[24], time[16], num[12];
     fmtTenths(num, sizeof(num), v.boostTenths < 0 ? -v.boostTenths : v.boostTenths);
-    snprintf(buf, sizeof(buf), "SPEED %s%s", v.boostTenths > 0 ? "+" : (v.boostTenths < 0 ? "-" : ""), num);
-    c.text(L.W - L.chartLeft, modeY, buf, L.sMode, v.editingTime ? GREY : ACCENT, Align::End, Align::Middle);
+    snprintf(speed, sizeof(speed), "%s%s%s", v.boostTenths > 0 ? "+" : (v.boostTenths < 0 ? "-" : ""), num,
+             L.big ? " km/h" : "");
+    snprintf(time, sizeof(time), "%d min", v.durationMin);
+    const int gap = L.big ? 8 : 4, y = L.big ? 4 : 3, h = L.big ? 46 : 21;
+    const int w = (L.W - 2 * L.chartLeft - gap) / 2;
+    drawField(c, L, L.chartLeft, y, w, h, "SPEED", speed, !v.editingTime);
+    drawField(c, L, L.W - L.chartLeft - w, y, w, h, "TIME", time, v.editingTime);
 
+    // then the distance, and what the other buttons do, clear of the bar labels
     fmtKm(num, sizeof(num), v.distanceHkm);
-    snprintf(buf, sizeof(buf), "%s km   X + / Y -   B swap   A start", num);
-    c.text(L.W / 2, hintY, buf, 1, GREY, Align::Middle, Align::Middle);
+    char km[24];
+    snprintf(km, sizeof(km), "%s km", num);
+    if (L.big) {
+        c.text(fonts::ATKINSON_REGULAR_15, L.chartLeft + 2, 68, km, LIGHT_GREY, Align::Start, Align::End);
+        c.text(fonts::ATKINSON_REGULAR_15, L.W - L.chartLeft - 2, 68, "A start    B swap", GREY, Align::End,
+               Align::End);
+    } else {
+        c.text(L.chartLeft + 1, 31, km, 1, LIGHT_GREY, Align::Start, Align::Middle);
+        c.text(L.W - L.chartLeft - 1, 31, "A start  B swap", 1, GREY, Align::End, Align::Middle);
+    }
 }
 
 void drawSession(Canvas& c, const Layout& L, const View& v) {

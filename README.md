@@ -35,7 +35,7 @@ The cores share one small struct ([treadmill_link.h](src/treadmill_link.h)). Cor
 | `belt.*` | Assumed belt state, and the next press needed to reach a target. | ✓ |
 | `treadmill_link.h` | Lock-free data shared between the cores. | ✓ |
 | `canvas.*`, `screens.*` | RGB565 drawing and every screen. Port of `ui.py`. | ✓ |
-| `font.h`, `fonts/*.h` | Anti-aliased Poppins for the splash, pre-rendered by `scripts/make_font.py`. | ✓ |
+| `font.h`, `fonts/*.h` | Anti-aliased fonts (Poppins, Atkinson Hyperlegible), pre-rendered by `scripts/make_font.py`. | ✓ |
 | `rf_codes.h` | Captured mark/space timings for each remote button. | ✓ |
 | `treadmill.*` | Core 1's loop. | |
 | `rf_tx.*` | The PIO OOK transmitter. | |
@@ -62,11 +62,11 @@ The 1.14" pack gets the compact layout (`docs/screens/*_114.png`).
 | Button | Position | Action |
 |---|---|---|
 | **A** | top-left | Planning→start, Running→pause, Paused→resume |
-| **B** | bottom-left | Planning→swap between adjusting TIME and INTENSITY |
+| **B** | bottom-left | Planning→swap between adjusting SPEED and TIME |
 | **X** | top-right | Planning→increase; Starting/Running/Paused→stop |
 | **Y** | bottom-right | Planning→decrease |
 
-TIME and INTENSITY work exactly as in the CircuitPython version (see its README). Any button skips the Completed screen. **X** during STARTING cancels the start and keeps the plan. During RESUMING it ends the session, as stop from Paused does.
+The planning screen opens with **SPEED** selected (the left-hand card, lit in blue); **B** swaps to **TIME** on the right. SPEED (the intensity) and TIME work exactly as in the CircuitPython version (see its README); the screen was redesigned to give the chart more room, with no title and the two fields as cards. Any button skips the Completed screen. **X** during STARTING cancels the start and keeps the plan. During RESUMING it ends the session, as stop from Paused does.
 
 ## Behaviour changes from CircuitPython
 
@@ -88,13 +88,18 @@ The display pack is chosen by build environment instead of `DISPLAY_MODEL`:
 
 ## Fonts
 
-Most text uses the classic 5x7 pixel font, scaled up like CircuitPython's terminalio. The splash's name and byline use **Poppins** (Bold 56/32 px, SemiBold 20/14 px), anti-aliased with 16 levels and blended onto the screen. The glyphs are rendered on your computer into `src/fonts/*.h` and kept in flash, so the firmware needs no font engine. To add a size (needs Pillow):
+Text comes in three styles:
+- **Poppins** (Bold 56/32 px, SemiBold 20/14 px) for the splash's name and byline.
+- **Atkinson Hyperlegible**, which the Braille Institute designed for legibility, for the planning screen's fields and info line (Bold 24/16 px, Regular 15 px).
+- The classic 5x7 pixel font for small labels, where unscaled pixels are the sharpest option (bar speeds, the 1.14" info line). It's also used, scaled up, on the screens not yet converted.
+
+The smooth fonts are anti-aliased with 16 levels and blended onto the screen. The glyphs are rendered on your computer into `src/fonts/*.h` and kept in flash, so the firmware needs no font engine. To add a size (needs Pillow):
 
 ```sh
 python3 scripts/make_font.py fonts/Poppins-Bold.ttf 40 POPPINS_BOLD_40 > src/fonts/poppins_bold_40.h
 ```
 
-Poppins is under the SIL Open Font License (`fonts/OFL.txt`).
+Both are under the SIL Open Font License (`fonts/OFL-*.txt`).
 
 ## Wiring
 
@@ -104,6 +109,19 @@ This is unchanged from the CircuitPython version.
 - **Buttons:** A/B/X/Y on GP12–15.
 
 ## Build and flash
+
+**Flash a board with the latest release** (needs the GitHub CLI, `gh`):
+
+```sh
+scripts/flash-latest.sh                  # 2.0"/2.8" Display Pack
+scripts/flash-latest.sh --pack 114       # 1.14" Display Pack
+scripts/flash-latest.sh v0.3.0           # a specific release
+scripts/flash-latest.sh --uf2 .pio/build/pico_28/firmware.uf2   # your own build
+```
+
+If the board is already running Treadmill Buddy, the script reboots it into the bootloader over USB, so there's nothing to press. Otherwise (a new board, or one running CircuitPython) it asks you to hold **BOOTSEL** while plugging in. It flashes with picotool when it can find one, and checks the board comes back as TREADMILLBUDDY. Every USB step has a time limit, so it can't hang. Release UF2s are named `treadmillbuddy-display28-vX.Y.Z.uf2` and `...-display114-...`.
+
+To build it yourself:
 
 One-time setup: VS Code + the PlatformIO extension (or `pip install platformio`).
 

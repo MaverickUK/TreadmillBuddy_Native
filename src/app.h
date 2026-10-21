@@ -73,7 +73,7 @@ private:
     plan::Plan base_;   // the raw walk
     plan::Plan shown_;  // the walk with the intensity boost laid on top
     uint32_t planVersion_ = 1;
-    bool editingTime_ = true;
+    bool editingTime_ = false;  // X/Y adjust SPEED first; B swaps to TIME
 
     State state_ = State::Splash;
     bool resuming_ = false;   // STARTING after a pause, not a new session
