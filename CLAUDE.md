@@ -30,4 +30,4 @@ SemVer in `src/version.h` (`FIRMWARE_VERSION`), starting at 0.1.0. Bump it in th
 
 ## Status
 
-Ported with feature parity to CircuitPython 1.2.0 (2026-10-21). It builds and the host tests pass. **Not yet run on hardware:** see the README's "First run on hardware" checklist (orientation, RF in test mode, a short bench session).
+Ported with feature parity to CircuitPython 1.2.0 (2026-10-21). **Running on hardware** (Pico + 2.8" Display Pack, v0.1.0 to v0.3.0, 2026-10-21): boot, display orientation and speed (21.5 ms frames), planning-screen buttons, watchdog/core 1 heartbeat, USB identity, flashing. **Not yet confirmed on hardware:** RF control of the treadmill (RF test mode), a full session, and the 1.14" pack. The README's "Hardware testing" section is the checklist; keep it up to date.

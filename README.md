@@ -6,7 +6,7 @@ Native C++ firmware for [Treadmill Buddy](https://github.com/MaverickUK/Treadmil
 
 ## Status
 
-Feature parity with the CircuitPython version 1.2.0. Builds, and passes the host tests. **Not yet run on hardware.** See [First run on hardware](#first-run-on-hardware).
+Feature parity with the CircuitPython version 1.2.0, plus improvements. **Running on real hardware** (a Raspberry Pi Pico with the 2.8" Display Pack, since v0.1.0 on 2026-10-21). Still to confirm on hardware: driving the treadmill over RF and a full session. See [Hardware testing](#hardware-testing).
 
 ## What's better than the CircuitPython version
 
@@ -163,10 +163,18 @@ They cover:
 - **Whole sessions** against a simulated treadmill: start, segments, speed-change alert, pause/resume, completion, cancel.
 - **Buttons, the canvas, and every screen at both sizes**, plus the speed colours against `ui.py`.
 
-## First run on hardware
+## Hardware testing
 
-These are the things the host tests can't prove:
-1. **Picture orientation.** If it's upside down, set `LCD_ROTATE_180 = true`. The init sequence and offsets are Pimoroni's for these packs.
-2. **RF.** Hold **B** at power-up and press A/B/X/Y with the treadmill nearby. Each press should register exactly once; adjust `RF_REPEATS` if not. A logic analyser on GP27 should show the same envelope as `rf_codes.h`.
-3. **A full session** with `SPEED_CHANGE_INTERVAL_S = 15` and `SESSION_DURATION_MIN = 5`: check the countdown/ramp display, pause/resume, and that X stops the belt mid-ramp.
-4. `s` on the serial console: `frame=` should be about 20000 µs on the 2.8" pack.
+These are the things the host tests can't prove. The hardware is a Raspberry Pi Pico (RP2040) with the Pico Display Pack 2.8", tested 2026-10-21 (v0.1.0 to v0.3.0).
+
+**Confirmed working:**
+- **Boot and display.** It boots straight to the splash and then the planning screen. The picture is the right way up (no `LCD_ROTATE_180` needed), with the colours and layout as in the previews above.
+- **Buttons on the planning screen.** B swaps SPEED/TIME, and X/Y adjust them.
+- **Display speed.** `s` on the serial console reports `frame=21520us` for a full 320x240 frame (SPI at 62.5 MHz by DMA), and about 9 ms to draw one.
+- **Both cores.** The treadmill core's heartbeat keeps the watchdog fed (no resets), and nothing is transmitted until asked.
+- **USB.** The board shows up as TREADMILLBUDDY. `scripts/flash-latest.sh` flashes both a release and a local build without a button press (repeated runs, 5–7 s each).
+
+**Still to test:**
+1. **RF.** Hold **B** at power-up and press A/B/X/Y with the treadmill nearby. Each press should register exactly once; adjust `RF_REPEATS` if not. A logic analyser on GP27 should show the same envelope as `rf_codes.h`.
+2. **A full session** with `SPEED_CHANGE_INTERVAL_S = 15` and `SESSION_DURATION_MIN = 5`: check the countdown/ramp display, pause/resume, and that X stops the belt mid-ramp.
+3. **The 1.14" Display Pack** (`pico_114`): only tested on the host so far.
